@@ -30,19 +30,19 @@ This simulator models a network of interconnected services where failures in ups
    cd Domino_Effect_Challenge
    ```
 
-2. **Run a simulation**:
+2. **Create Virtual Environment**:
    ```bash
-   python domino.py
+   python -m venv venv && .\venv\Scripts\Activate.ps1
    ```
-
-3. **Run with interactive mode**:
+   
+3. **Install dependencies**:
    ```bash
-   python domino.py --interactive
+   pip install pyyaml
    ```
-
-4. **Run with a specific query**:
+   
+4. **Run with interactive mode**:
    ```bash
-   python domino.py --query "what happened in the last 5 ticks?"
+   python domino.py --input services.json --config config.yaml --interactive
    ```
 
 ## 📁 Project Structure
