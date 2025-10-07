@@ -29,6 +29,7 @@ class ServiceGraph:
         self.rev_adj = self.build_reverse_adjacency()
         self.cycles = []
         self.sorted_services = self.topological_sort()
+        self.name_index_lower = {name.lower(): name for name in self.services.keys()}
 
     def build_reverse_adjacency(self):
         rev_adj = defaultdict(set)
@@ -99,8 +100,7 @@ class Simulator:
         os.makedirs(self.output_dir, exist_ok=True)
         self.log_file_path = os.path.join(self.output_dir, 'output.log')
         random.seed(self.config['seed'])
-        
-       
+
         self.events = []
         self.incident_log = []
         self.service_degradation_history = defaultdict(list)
@@ -131,7 +131,7 @@ class Simulator:
         self.log(f"\n# End: {end_time}")
 
     def run_tick(self):
-       
+        
         for service in self.graph.services.values():
             service.initial_health = service.health
             self.service_degradation_history[service.name].append({
@@ -140,7 +140,7 @@ class Simulator:
                 'is_failed': service.is_failed
             })
 
-        glitched_service = self._apply_glitch()
+        glitched_service = self.apply_glitch()
         if glitched_service:
             self.log(f"[GLITCH] {glitched_service.name} health {glitched_service.initial_health:.2f} -> {glitched_service.health:.2f} (random glitch)")
             self.events.append({
@@ -184,7 +184,6 @@ class Simulator:
 
         victim = random.choice(eligible)
         glitch_delta = random.uniform(0.2, 0.5)
-        old_health = victim.health
         victim.health = max(0, victim.health - glitch_delta)
         return victim
 
@@ -297,8 +296,8 @@ class Simulator:
         self.log(f"[PRIORITY] roots={{{', '.join(r.name for r in root_causes)}}}, order={root_names}")
         if sorted_roots:
             self.log(f"[SUGGESTION] Remediate {sorted_roots[0].name} first")
+
         
-       
         if sorted_roots:
             self.incident_log.append({
                 'tick': self.tick,
@@ -405,7 +404,11 @@ class QueryHandler:
                 'current': current
             }
 
-        sorted_svc = sorted(scores.items(), key=lambda x: (x[1]['failures'], x[1]['degradation']), reverse=True)
+        sorted_svc = sorted(
+            scores.items(),
+            key=lambda x: (x[1]['failures'], x[1]['degradation']),
+            reverse=True
+        )
 
         explanation += "Rank | Service    | Failures | Degradation | Avg Health | Current\n"
         explanation += "-----+------------+----------+-------------+------------+---------\n"
@@ -416,36 +419,52 @@ class QueryHandler:
         return explanation
 
 
+
+def _normalize_service_name(graph, token):
+    if not token:
+        return None
+    if token in graph.services:
+        return token
+    cleaned = token.rstrip('?.!,;:').strip()
+    if cleaned in graph.services:
+        return cleaned
+    return graph.name_index_lower.get(cleaned.lower())
+
+
 def handle_query(query_handler, query_text):
-    query = query_text.lower().strip()
-    
-    if query.startswith("why is") and "failing" in query:
-        match = re.search(r'why is\s+(\S+)', query)
-        if match:
-            return query_handler.query_why_failing(match.group(1))
+    q = query_text.strip()
+    q_lower = q.lower()
+
+    if q_lower.startswith("why is") and "failing" in q_lower:
+        m = re.search(r'why is\s+([A-Za-z0-9_\-]+)', q, flags=re.IGNORECASE)
+        if m:
+            token = m.group(1).rstrip('?.!,;:').strip()
+            canonical = _normalize_service_name(query_handler.graph, token)
+            if canonical:
+                return query_handler.query_why_failing(canonical)
+            return f"[ERROR] Service '{token}' not found."
         return "[ERROR] Could not parse service name"
-    
-    elif "what happened" in query:
-        match = re.search(r'last\s+(\d+)', query)
-        n = int(match.group(1)) if match else 10
+
+    elif "what happened" in q_lower:
+        m = re.search(r'last\s+(\d+)', q_lower)
+        n = int(m.group(1)) if m else 10
         return query_handler.query_last_n_ticks(n)
-    
-    elif "top-impacted" in query or "top impacted" in query:
+
+    elif "top-impacted" in q_lower or "top impacted" in q_lower:
         return query_handler.query_top_impacted()
-    
+
     else:
         return "[ERROR] Unknown query. Try: 'why is <service> failing?', 'what happened in the last N ticks?', 'top-impacted'"
 
 
 def main():
-   
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument('--input', default='services.json')
     parser.add_argument('--config', default='config.yaml')
     parser.add_argument('--query', help='Single query after simulation')
-    parser.add_argument('--interactive', '-i', action='store_true')
+    parser.add_argument('--interactive', '-i', action='store_true', help='Interactive query mode')
     args = parser.parse_args()
 
     try:
@@ -468,11 +487,11 @@ def main():
     simulator.run()
     print(f"\nSimulation complete. Log file at: {simulator.log_file_path}")
 
-   
+    
     if args.query:
         query_handler = QueryHandler(simulator)
         print(handle_query(query_handler, args.query))
-    
+
     elif args.interactive:
         print(f"\n{'='*60}\n[INTERACTIVE QUERY MODE]\n{'='*60}")
         print("\nAvailable queries:")
@@ -480,13 +499,13 @@ def main():
         print("  - what happened in the last <N> ticks?")
         print("  - top-impacted")
         print("  - help | exit\n")
-        
+
         query_handler = QueryHandler(simulator)
-        
+
         while True:
             try:
                 query = input("Query> ").strip()
-                
+
                 if not query:
                     continue
                 if query.lower() in ['exit', 'quit', 'q']:
@@ -495,9 +514,9 @@ def main():
                 if query.lower() == 'help':
                     print("\nQueries: 'why is <service> failing?', 'what happened in the last N ticks?', 'top-impacted'")
                     continue
-                
+
                 print(handle_query(query_handler, query))
-                
+
             except KeyboardInterrupt:
                 print("\nGoodbye!")
                 break
