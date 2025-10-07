@@ -1,0 +1,6 @@
+ticks: 50
+threshold: 0.70
+alpha: 0.8
+cooldown: 1
+heal_to: 0.88
+seed: 1337

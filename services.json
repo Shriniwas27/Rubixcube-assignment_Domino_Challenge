@@ -1,0 +1,12 @@
+[
+  { "name": "service-A", "depends_on": ["service-B", "service-C"], "health": 0.98 },
+  { "name": "service-B", "depends_on": ["service-D"], "health": 0.95 },
+  { "name": "service-C", "depends_on": ["service-E", "service-F"], "health": 0.99 },
+  { "name": "service-D", "depends_on": [], "health": 0.97 },
+  { "name": "service-E", "depends_on": ["service-G"], "health": 0.96 },
+  { "name": "service-F", "depends_on": ["service-G", "service-H"], "health": 0.94 },
+  { "name": "service-G", "depends_on": [], "health": 0.99 },
+  { "name": "service-H", "depends_on": ["service-I"], "health": 0.92 },
+  { "name": "service-I", "depends_on": [], "health": 0.97 },
+  { "name": "service-J", "depends_on": ["service-B", "service-I"], "health": 0.95 }
+]
